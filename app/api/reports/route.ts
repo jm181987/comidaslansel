@@ -121,6 +121,7 @@ export async function GET(req: Request) {
         doc.y = y + height;
       };
 
+      const totalsByDish = new Map<string, number>();
       for (const [dayDate, day] of days) {
         if (doc.y + 90 > bottom) doc.addPage();
         doc.font('Helvetica-Bold').fontSize(12).fillColor('#173c56')
@@ -128,17 +129,23 @@ export async function GET(req: Request) {
         doc.moveDown(0.45);
         tableHeader();
 
-        let dayTotal = 0;
         for (const dish of day.dishes.values()) {
           for (const [index, person] of dish.people.entries()) {
             drawRow(index === 0 ? dish.name : '', person, 1);
           }
-          drawRow(`Subtotal: ${dish.name}`, '', dish.people.length, true);
-          dayTotal += dish.people.length;
+          totalsByDish.set(dish.name, (totalsByDish.get(dish.name) || 0) + dish.people.length);
         }
-        drawRow('TOTAL DEL DÍA', '', dayTotal, true);
         doc.moveDown(1.2);
       }
+
+      if (doc.y + 100 > bottom) doc.addPage();
+      doc.font('Helvetica-Bold').fontSize(13).fillColor('#173c56').text('RESUMEN FINAL DEL PERÍODO');
+      doc.moveDown(0.5);
+      tableHeader();
+      for (const [dishName, count] of totalsByDish) {
+        drawRow(dishName, 'Subtotal por plato', count, true);
+      }
+      drawRow('TOTAL GENERAL', 'Todas las porciones', rows.length, true);
     }
 
     doc.end();
