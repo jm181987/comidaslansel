@@ -1,0 +1,5 @@
+import pg from 'pg';import bcrypt from 'bcryptjs';import fs from 'node:fs';
+const {DATABASE_URL,ADMIN_EMAIL,ADMIN_PASSWORD,ADMIN_NAME='Administrador'}=process.env;
+if(!DATABASE_URL||!ADMIN_EMAIL||!ADMIN_PASSWORD||ADMIN_PASSWORD.length<12){console.error('Configurar DATABASE_URL, ADMIN_EMAIL y ADMIN_PASSWORD (mínimo 12 caracteres)');process.exit(1)}
+const client=new pg.Client({connectionString:DATABASE_URL,ssl:process.env.DATABASE_SSL==='true'?{rejectUnauthorized:process.env.DATABASE_SSL_REJECT_UNAUTHORIZED!=='false'}:undefined});
+try{await client.connect();await client.query(fs.readFileSync(new URL('./schema.sql',import.meta.url),'utf8'));const result=await client.query('SELECT id FROM users WHERE lower(email)=lower($1)',[ADMIN_EMAIL]);if(!result.rowCount){await client.query('INSERT INTO users(name,email,password_hash,role) VALUES($1,$2,$3,$4)',[ADMIN_NAME,ADMIN_EMAIL.toLowerCase(),await bcrypt.hash(ADMIN_PASSWORD,12),'admin']);console.log('Administrador inicial creado')}else console.log('Base inicializada; usuario existente conservado')}catch(e){console.error('Error inicializando base:',e.message);process.exitCode=1}finally{await client.end().catch(()=>{})}
