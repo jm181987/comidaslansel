@@ -1,8 +1,0 @@
-import {cookies} from 'next/headers';import {SignJWT,jwtVerify} from 'jose';import {query} from './db';import {NextResponse} from 'next/server';
-export type User={id:number;name:string;email:string;role:'admin'|'employee';active:boolean};
-const cookieName='comidas_session';function secret(){const s=process.env.SESSION_SECRET;if(!s||s.length<32)throw Error('SESSION_SECRET debe tener al menos 32 caracteres');return new TextEncoder().encode(s)}
-export async function createSession(u:User){return new SignJWT({role:u.role}).setProtectedHeader({alg:'HS256'}).setSubject(String(u.id)).setIssuedAt().setExpirationTime('7d').sign(secret())}
-export async function getUser():Promise<User|null>{try{const token=(await cookies()).get(cookieName)?.value;if(!token)return null;const {payload}=await jwtVerify(token,secret());const id=Number(payload.sub);if(!Number.isSafeInteger(id))return null;const rows=await query<User>('SELECT id,name,email,role,active FROM users WHERE id=$1 AND active=true',[id]);return rows[0]||null}catch{return null}}
-export function setSession(r:NextResponse,token:string){r.cookies.set(cookieName,token,{httpOnly:true,secure:process.env.NODE_ENV==='production',sameSite:'lax',path:'/',maxAge:604800});return r}
-export function clearSession(r:NextResponse){r.cookies.set(cookieName,'',{httpOnly:true,secure:process.env.NODE_ENV==='production',sameSite:'lax',path:'/',maxAge:0});return r}
-export const unauthorized=()=>NextResponse.json({error:'No autorizado'},{status:401});export const forbidden=()=>NextResponse.json({error:'Sin permisos'},{status:403});export const badRequest=(message:string,status=400)=>NextResponse.json({error:message},{status});
