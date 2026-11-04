@@ -76,25 +76,68 @@ export async function GET(req: Request) {
         day.dishes.get(row.option_id)!.people.push(row.user_name);
       }
 
-      for (const [dayDate, day] of days) {
-        ensureSpace(65);
-        doc.font('Helvetica-Bold').fontSize(13).fillColor('#172b4d')
-          .text(`${dayDate}  |  ${day.title}`);
-        doc.moveDown(0.5);
+      const left = 42;
+      const widths = [215, 245, 51];
+      const x = [left, left + widths[0], left + widths[0] + widths[1]];
+      const tableWidth = widths.reduce((sum, width) => sum + width, 0);
+      const bottom = 785;
+      const headerHeight = 27;
+      const padding = 7;
 
-        for (const dish of day.dishes.values()) {
-          ensureSpace(48);
-          doc.font('Helvetica-Bold').fontSize(11).fillColor('#176344')
-            .text(`${dish.name} — ${dish.people.length} ${dish.people.length === 1 ? 'porción' : 'porciones'}`);
-          doc.moveDown(0.2);
-          for (const name of dish.people) {
-            ensureSpace(18);
-            doc.font('Helvetica').fontSize(10).fillColor('#172b4d')
-              .text(`• ${name}`, { indent: 12 });
-          }
-          doc.moveDown(0.6);
+      const tableHeader = () => {
+        const y = doc.y;
+        doc.rect(left, y, tableWidth, headerHeight).fill('#173c56');
+        doc.font('Helvetica-Bold').fontSize(9).fillColor('#ffffff');
+        doc.text('PLATO SELECCIONADO', x[0] + padding, y + 8, { width: widths[0] - padding * 2, lineBreak: false });
+        doc.text('FUNCIONARIO', x[1] + padding, y + 8, { width: widths[1] - padding * 2, lineBreak: false });
+        doc.text('CANT.', x[2] + 3, y + 8, { width: widths[2] - 6, align: 'center', lineBreak: false });
+        doc.y = y + headerHeight;
+      };
+
+      const fitRow = (height: number) => {
+        if (doc.y + height > bottom) {
+          doc.addPage();
+          tableHeader();
         }
-        doc.moveDown(0.4);
+      };
+
+      let stripe = 0;
+      const drawRow = (dish: string, person: string, count: number, subtotal = false) => {
+        doc.font(subtotal ? 'Helvetica-Bold' : 'Helvetica').fontSize(9);
+        const textWidth = (index: number) => widths[index] - padding * 2;
+        const height = Math.max(
+          doc.heightOfString(dish, { width: textWidth(0) }),
+          doc.heightOfString(person, { width: textWidth(1) }),
+          12
+        ) + 13;
+        fitRow(height);
+        const y = doc.y;
+        const fill = subtotal ? '#dcece7' : stripe++ % 2 === 0 ? '#f3f6f8' : '#ffffff';
+        doc.rect(left, y, tableWidth, height).fill(fill);
+        doc.font(subtotal ? 'Helvetica-Bold' : 'Helvetica').fontSize(9).fillColor('#203345');
+        doc.text(dish, x[0] + padding, y + 6, { width: textWidth(0) });
+        doc.text(person, x[1] + padding, y + 6, { width: textWidth(1) });
+        doc.text(String(count), x[2] + 3, y + 6, { width: widths[2] - 6, align: 'center' });
+        doc.y = y + height;
+      };
+
+      for (const [dayDate, day] of days) {
+        if (doc.y + 90 > bottom) doc.addPage();
+        doc.font('Helvetica-Bold').fontSize(12).fillColor('#173c56')
+          .text(`${dayDate}  |  ${day.title}`);
+        doc.moveDown(0.45);
+        tableHeader();
+
+        let dayTotal = 0;
+        for (const dish of day.dishes.values()) {
+          for (const [index, person] of dish.people.entries()) {
+            drawRow(index === 0 ? dish.name : '', person, 1);
+          }
+          drawRow(`Subtotal: ${dish.name}`, '', dish.people.length, true);
+          dayTotal += dish.people.length;
+        }
+        drawRow('TOTAL DEL DÍA', '', dayTotal, true);
+        doc.moveDown(1.2);
       }
     }
 
