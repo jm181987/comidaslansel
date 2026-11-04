@@ -1,0 +1,1 @@
+import './globals.css';export const metadata={title:'LANSEL · Gestión de comidas',description:'Pedidos de comidas para funcionarios'};export default function RootLayout({children}:{children:React.ReactNode}){return <html lang="es"><body>{children}</body></html>}
