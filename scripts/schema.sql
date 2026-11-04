@@ -8,3 +8,5 @@ CREATE INDEX IF NOT EXISTS idx_orders_menu ON orders(menu_id);
 CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
 CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 INSERT INTO app_settings(key,value) VALUES('order_mode','today') ON CONFLICT(key) DO NOTHING;
+
+INSERT INTO app_settings(key,value) VALUES('registration_mode','open') ON CONFLICT(key) DO NOTHING;

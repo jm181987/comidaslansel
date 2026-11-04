@@ -6,7 +6,7 @@ export const runtime = 'nodejs';
 export async function GET() {
   const user = await getUser();
   if (!user) return unauthorized();
-  try { return NextResponse.json({orderMode: await getOrderMode()}); }
+  try { const rows=await query<{value:string}>("SELECT value FROM app_settings WHERE key='registration_mode'");return NextResponse.json({orderMode:await getOrderMode(),registrationMode:rows[0]?.value||'open'}); }
   catch(e) { console.error('Settings GET:',e); return NextResponse.json({error:'No se pudo leer la configuración. Ejecute la migración SQL.'},{status:500}); }
 }
 export async function PUT(req: Request) {
@@ -14,7 +14,7 @@ export async function PUT(req: Request) {
   if (!user) return unauthorized();
   if (user.role !== 'admin') return forbidden();
   const data = await req.json().catch(()=>null);
-  if (data?.orderMode !== 'today' && data?.orderMode !== 'today_and_future') return badRequest('Modo de pedidos inválido');
+  if(['open','approval','closed'].includes(data?.registrationMode)){await query("INSERT INTO app_settings(key,value) VALUES('registration_mode',$1) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value",[data.registrationMode]);return NextResponse.json({registrationMode:data.registrationMode})}if (data?.orderMode !== 'today' && data?.orderMode !== 'today_and_future') return badRequest('Modo de pedidos inválido');
   try {
     await query("INSERT INTO app_settings(key,value) VALUES('order_mode',$1) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value",[data.orderMode]);
     return NextResponse.json({orderMode:data.orderMode});
