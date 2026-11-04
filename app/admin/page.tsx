@@ -1,1 +1,0 @@
-import {redirect} from 'next/navigation';import {getUser} from '@/lib/auth';import Dashboard from './ui';export default async function Page(){const u=await getUser();if(!u)redirect('/login');if(u.role!=='admin')redirect('/orders');return <Dashboard user={u}/>}
