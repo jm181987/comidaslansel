@@ -14,3 +14,14 @@ export function dateAllowed(date: string, mode: OrderMode): boolean {
   const today = montevideoToday();
   return mode === 'today' ? date === today : date >= today;
 }
+
+export const ORDER_CUTOFF_MESSAGE='Pedidos aceptados hasta la hora 11:30';
+export function isTodayCutoffPassed(now=new Date()):boolean {
+ const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'America/Montevideo',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(now);
+ const hour=Number(parts.find(p=>p.type==='hour')?.value);
+ const minute=Number(parts.find(p=>p.type==='minute')?.value);
+ return hour*60+minute>=11*60+30;
+}
+export function isOrderCutoff(date:string,now=new Date()):boolean {
+ return date===montevideoToday()&&isTodayCutoffPassed(now);
+}
