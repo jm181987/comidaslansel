@@ -139,7 +139,7 @@ export async function GET(req: Request) {
       }
 
       if (doc.y + 100 > bottom) doc.addPage();
-      doc.font('Helvetica-Bold').fontSize(13).fillColor('#173c56').text('RESUMEN FINAL DEL PERÍODO');
+      doc.font('Helvetica-Bold').fontSize(13).fillColor('#173c56').text('RESUMEN FINAL DEL PERÍODO', 42, doc.y, { width: 511, lineBreak: false });
       doc.moveDown(0.5);
       tableHeader();
       for (const [dishName, count] of totalsByDish) {
