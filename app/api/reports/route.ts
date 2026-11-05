@@ -18,9 +18,10 @@ export async function GET(req: Request) {
   const date = url.searchParams.get('date') || '';
   if (type !== 'daily' && type !== 'monthly') return badRequest('Tipo inválido');
   if (type === 'daily' && !isoDate.safeParse(date).success) return badRequest('Fecha inválida');
-  if (type === 'monthly' && !/^\\d{4}-(0[1-9]|1[0-2])$/.test(date)) return badRequest('Mes inválido');
+  if (type === 'monthly' && !/^\d{4}-(0[1-9]|1[0-2])$/.test(date)) return badRequest('Mes inválido');
 
-  const where = type === 'daily' ? 'm.menu_date=$1' : "to_char(m.menu_date,'YYYY-MM')=$1";
+  const where = type === 'daily' ? 'm.menu_date=$1::date' : "m.menu_date >= $1::date AND m.menu_date < ($1::date + INTERVAL '1 month')";
+  const queryDate = type === 'daily' ? date : `${date}-01`;
   let rows: ReportRow[];
   try {
     rows = await query<ReportRow>(
@@ -34,7 +35,7 @@ export async function GET(req: Request) {
        JOIN menu_options mo ON mo.id=oi.option_id
        WHERE ${where}
        ORDER BY m.menu_date, mo.position, mo.id, u.name`,
-      [date]
+      [queryDate]
     );
   } catch (e) {
     console.error('Error consultando datos para PDF:', e);
@@ -49,10 +50,6 @@ export async function GET(req: Request) {
       doc.on('end', () => resolve(Buffer.concat(buffers)));
       doc.on('error', reject);
     });
-
-    const ensureSpace = (height: number) => {
-      if (doc.y + height > doc.page.height - 55) doc.addPage();
-    };
 
     doc.font('Helvetica-Bold').fontSize(18).fillColor('#172b4d').text('LANSEL | Reporte de comidas');
     doc.moveDown(0.4);
@@ -85,6 +82,7 @@ export async function GET(req: Request) {
       const padding = 7;
 
       const tableHeader = () => {
+        if (doc.y + headerHeight > bottom) doc.addPage();
         const y = doc.y;
         doc.rect(left, y, tableWidth, headerHeight).fill('#173c56');
         doc.font('Helvetica-Bold').fontSize(9).fillColor('#ffffff');
