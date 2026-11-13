@@ -18,16 +18,16 @@ export async function GET(req:Request){
  const url=new URL(req.url);
  const type=url.searchParams.get('type');
  const date=url.searchParams.get('date')||'';
- if(type!=='daily'&&type!=='monthly')return badRequest('Tipo inválido');
+ if(!['daily','monthly','weekly','range'].includes(type||''))return badRequest('Tipo inválido');
  if(type==='daily'&&!isoDate.safeParse(date).success)return badRequest('Fecha inválida');
  if(type==='monthly'&&!/^\d{4}-(0[1-9]|1[0-2])$/.test(date))return badRequest('Mes inválido');
- const where=type==='daily'?'m.menu_date=$1::date':"m.menu_date >= $1::date AND m.menu_date < ($1::date + INTERVAL '1 month')";
+ const from=url.searchParams.get('from')||'';const to=url.searchParams.get('to')||'';const custom=type==='weekly'||type==='range';if(custom){if(!/^\d{4}-\d{2}-\d{2}$/.test(from)||!/^\d{4}-\d{2}-\d{2}$/.test(to)||!Number.isFinite(Date.parse(from))||!Number.isFinite(Date.parse(to))||from>to)return badRequest('Rango de fechas inválido');const span=(Date.parse(to)-Date.parse(from))/86400000;if(span>(type==='weekly'?6:366))return badRequest('Rango de fechas demasiado extenso')};const where=custom?'m.menu_date BETWEEN $1::date AND $2::date':type==='daily'?'m.menu_date=$1::date':"m.menu_date >= $1::date AND m.menu_date < ($1::date + INTERVAL '1 month')";
  let rows:ReportRow[];
  try{
   rows=await query<ReportRow>(`SELECT m.menu_date::text AS date,m.title AS menu_title,u.id AS user_id,u.name AS user_name,mo.id AS option_id,mo.name AS option_name
    FROM orders o JOIN menus m ON m.id=o.menu_id JOIN users u ON u.id=o.user_id
    JOIN order_items oi ON oi.order_id=o.id JOIN menu_options mo ON mo.id=oi.option_id
-   WHERE ${where} ORDER BY m.menu_date,mo.position,mo.id,u.name`,[type==='daily'?date:date+'-01']);
+   WHERE ${where} ORDER BY m.menu_date,mo.position,mo.id,u.name`,custom?[from,to]:[type==='daily'?date:date+'-01']);
  }catch(e){console.error('Report query error',e);return NextResponse.json({error:'No se pudieron consultar los pedidos para el reporte'},{status:500})}
  try{
   const days=new Map<string,Day>();
@@ -52,13 +52,13 @@ export async function GET(req:Request){
   function header(){
    doc.rect(0,0,595,9).fill(green);
    doc.font('Helvetica-Bold').fontSize(17).fillColor(navy).text('LANSEL  |  CONTROL DE COMIDAS',left,34);
-   doc.font('Helvetica').fontSize(10).fillColor(muted).text(type==='monthly'?'REPORTE MENSUAL':'REPORTE DIARIO',left,58);
+   doc.font('Helvetica').fontSize(10).fillColor(muted).text(type==='monthly'?'REPORTE MENSUAL':type==='weekly'?'REPORTE SEMANAL':type==='range'?'REPORTE POR FECHAS':'REPORTE DIARIO',left,58);
    doc.moveTo(left,78).lineTo(right,78).strokeColor('#d9e4e7').stroke();
    doc.y=96;
   }
   function footer(){
-   doc.font('Helvetica').fontSize(8).fillColor(muted).text('LANSEL  •  Reporte generado automáticamente',left,810,{width:390,lineBreak:false});
-   doc.text('Página '+page,480,810,{width:73,align:'right',lineBreak:false});
+   doc.font('Helvetica').fontSize(8).fillColor(muted).text('LANSEL  •  Reporte generado automáticamente',left,802,{width:390,height:12,lineBreak:false});
+   doc.text('Página '+page,480,802,{width:73,height:12,align:'right',lineBreak:false});
   }
   function newPage(){footer();doc.addPage();page++;header()}
   function ensure(h:number){if(doc.y+h>bottom)newPage()}
@@ -74,7 +74,7 @@ export async function GET(req:Request){
    doc.moveTo(left,doc.y).lineTo(right,doc.y).strokeColor('#e4eaee').stroke();
   }
   header();
-  const period=type==='monthly'?monthLabel(date):moneylessDate(date);
+  const period=type==='monthly'?monthLabel(date):custom?moneylessDate(from)+' al '+moneylessDate(to):moneylessDate(date);
   doc.font('Helvetica-Bold').fontSize(20).fillColor(navy).text(period.charAt(0).toUpperCase()+period.slice(1));
   doc.moveDown(.4);
   doc.font('Helvetica').fontSize(10).fillColor(muted).text('Detalle organizado por fecha, plato y funcionario.');
@@ -105,16 +105,16 @@ export async function GET(req:Request){
      ensure(50);
      const nameY=doc.y;
      doc.rect(left,nameY,width,27).fill('#eaf3ee');
-     doc.font('Helvetica-Bold').fontSize(10).fillColor(green).text(dish.name,left+10,nameY+7,{width:width-92});
-     doc.text(String(dish.people.length)+' porciones',right-90,nameY+7,{width:80,align:'right'});
+     doc.font('Helvetica-Bold').fontSize(10).fillColor(green).text(dish.name,left+10,nameY+7,{width:width-92,height:13,lineBreak:false,ellipsis:true});
+     doc.text(String(dish.people.length)+' porciones',right-90,nameY+7,{width:80,height:13,align:'right',lineBreak:false});
      doc.y=nameY+32;
      for(const person of dish.people){
       doc.font('Helvetica').fontSize(9);
       const h=Math.max(21,doc.heightOfString(person,{width:width-38})+10);
       ensure(h);
       const py=doc.y;
-      doc.fillColor(muted).text('•',left+11,py+4,{width:12});
-      doc.fillColor(navy).text(person,left+27,py+4,{width:width-38});
+      doc.fillColor(muted).text('•',left+11,py+4,{width:12,height:12,lineBreak:false});
+      doc.fillColor(navy).text(person,left+27,py+4,{width:width-38,height:Math.max(12,h-8),lineBreak:false,ellipsis:true});
       doc.y=py+h;
      }
      doc.y+=5;
@@ -124,13 +124,13 @@ export async function GET(req:Request){
     doc.y+=24;
    }
    ensure(140);
-   if(type==='monthly'&&doc.y>480)newPage();
+   if(doc.y>650)newPage();
    ensure(95);
    const sy=doc.y;
    doc.roundedRect(left,sy,width,48,7).fill(navy);
-   doc.font('Helvetica-Bold').fontSize(14).fillColor('#ffffff').text('RESUMEN FINAL DEL PERÍODO',left+12,sy+14,{width:width-24});
+   doc.font('Helvetica-Bold').fontSize(14).fillColor('#ffffff').text('RESUMEN FINAL DEL PERÍODO',left+12,sy+14,{width:width-24,height:18,lineBreak:false});
    doc.y=sy+59;
-   doc.font('Helvetica').fontSize(9).fillColor(muted).text('TOTAL DE PORCIONES POR PLATO');
+   doc.font('Helvetica').fontSize(9).fillColor(muted).text('TOTAL DE PORCIONES POR PLATO',left,doc.y,{width,height:12,lineBreak:false});
    doc.y+=11;
    for(const [dish,count] of [...totalDishes].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])))line(dish,String(count));
    doc.y+=7;
@@ -139,6 +139,6 @@ export async function GET(req:Request){
   }
   footer();doc.end();
   const buffer=await done;
-  return new NextResponse(new Uint8Array(buffer),{headers:{'Content-Type':'application/pdf','Content-Disposition':`attachment; filename="comidas-${type}-${date}.pdf"`,'Cache-Control':'no-store'}});
+  return new NextResponse(new Uint8Array(buffer),{headers:{'Content-Type':'application/pdf','Content-Disposition':`attachment; filename="comidas-${type}-${custom?from+"-"+to:date}.pdf"`,'Cache-Control':'no-store'}});
  }catch(e){console.error('PDF generation error',e);return NextResponse.json({error:'No se pudo generar el archivo PDF'},{status:500})}
 }
